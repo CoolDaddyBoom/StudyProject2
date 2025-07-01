@@ -10,13 +10,18 @@ type User struct {
 	ID      string
 	Name    string
 	Balance float64
+	Mu      sync.Mutex
 }
 
 func (u *User) Deposit(amount float64) {
+	u.Mu.Lock()
+	defer u.Mu.Unlock()
 	u.Balance += amount
 }
 
 func (u *User) Withdraw(amount float64) error {
+	u.Mu.Lock()
+	defer u.Mu.Unlock()
 	if u.Balance < amount {
 		return errors.New("Insufficient funds")
 	} else {
