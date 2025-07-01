@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync"
 )
 
 type User struct {
@@ -66,6 +67,20 @@ func (ps *PaymentSystem) ProcessingTransactions(t Transaction) error {
 	return nil
 }
 
+func Worker(ps *PaymentSystem, ch <-chan Transaction, wg *sync.WaitGroup) {
+	defer wg.Done()
+	counter := 0
+	for t := range ch {
+		counter++
+		err := ps.ProcessingTransactions(t)
+		if err != nil {
+			fmt.Printf("Transaction result: %v\n", err)
+		} else {
+			fmt.Println("Transaction result: is successful")
+		}
+	}
+}
+
 func main() {
 
 	ps := &PaymentSystem{Users: make(map[string]*User), Transactions: []Transaction{}}
@@ -77,20 +92,27 @@ func main() {
 
 	t1 := Transaction{FromID: "1", ToID: "2", Amount: -1}
 	t2 := Transaction{FromID: "3", ToID: "1", Amount: 1000}
-	t4 := Transaction{FromID: "1", ToID: "2", Amount: 99}
+	t3 := Transaction{FromID: "1", ToID: "2", Amount: 99}
 
 	ps.AddTransaction(t1)
 	ps.AddTransaction(t2)
-	ps.AddTransaction(t4)
+	ps.AddTransaction(t3)
 
-	for i, t := range ps.Transactions {
-		err := ps.ProcessingTransactions(t)
-		if err != nil {
-			fmt.Printf("Transaction number %d: %v\n", i+1, err)
-		} else {
-			fmt.Printf("Transaction number %d: Is successful\n", i+1)
-		}
+	var ch chan Transaction = make(chan Transaction, len(ps.Transactions))
+	var wg sync.WaitGroup
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go Worker(ps, ch, &wg)
 	}
+
+	for _, t := range ps.Transactions {
+		ch <- t
+	}
+
+	close(ch)
+
+	wg.Wait()
 
 	fmt.Println("\nИтого:")
 	fmt.Printf("У первого пользователя получилось %.2f\n", ps.Users["1"].Balance)
